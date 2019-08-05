@@ -1,4 +1,4 @@
-![alt text](https://raw.githubusercontent.com/federico-terzi/webTablut/master/logo.png "webTablut")
+![alt text](logo.png "webTablut")
 A WebAssembly port of the O(sarracino) engine to play Tablut online
 
 # Compiling the Engine
