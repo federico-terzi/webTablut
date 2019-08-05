@@ -7,41 +7,58 @@
   <title>webTablut - Play Tablut Online against your PC!</title>
   <meta name="description" content="webTablut - Play Tablut Online against your PC!">
   <meta name="author" content="Federico Terzi">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <link rel="stylesheet" href="css/styles.css?v=1.0">
-
+  
 </head>
 
 <body onload='initialize()'>
+
+<img src="logo.png" class="logo-img"/>
+
+<div id="canvasContainer"></div>
+
+<h3>How to Play</h3>
+<p>Click on a white pawn and then select one of the available moves. 
+    In order to win, the white player has to bring the red king to one of the 16 winpoints.</p>
+
+<h3>About</h3>
+<p>
+    webTablut is a <b>very basic experiment</b> to bring the <a href="https://github.com/federico-terzi/osarracino/" target="_blank">O(sarracino) Tablut Engine</a> 
+    to the web using WebAssembly. The source is available on <a href="https://github.com/federico-terzi/webTablut">GitHub</a>.
+</p>
 
 <script src="js/pixi.min.js"></script>
 <script src="js/scaleToWindow.js"></script>
 <script async type="text/javascript" src="js/osarracino.js"></script>
 <script>
+
 function initialize() {
     // WASM functions    
     calculate_available_moves = Module.cwrap('calculate_available_moves', null, ['number', 'number', 'number', 'number','number']);
-    calculate_board = Module.cwrap('calculate_board', null, ['number', 'number', 'number', 'number','number', 'number']);
+    calculate_board = Module.cwrap('calculate_board', 'number', ['number', 'number', 'number', 'number','number', 'number']);
     calculate_move = Module.cwrap('calculate_move', null, ['number', 'number', 'number']);
     get_fx = Module.cwrap('get_fx', 'number', []);
     get_fy = Module.cwrap('get_fy', 'number', []);
     get_tx = Module.cwrap('get_tx', 'number', []);
     get_ty = Module.cwrap('get_ty', 'number', []);
 
+    // Initialize PIXI Graphics
     let app = new PIXI.Application({ 
         width: 450,         // default: 800
         height: 450,        // default: 600
         antialias: true,    // default: false
         transparent: false, // default: false
-        resolution: 2       // default: 1
+        resolution: 1       // default: 1
     }
     );
-    document.body.appendChild(app.view);
+    document.getElementById("canvasContainer").appendChild(app.view);
 
-    scaleToWindow(app.view); 
-    window.addEventListener("resize", function(event){
-        scaleToWindow(app.view);
-    });
+    // scaleToWindow(app.view); 
+    // window.addEventListener("resize", function(event){
+    //     scaleToWindow(app.view);
+    // });
 
     // Game configuration
     let boardConfig = [[0, 2, 2, 1, 1, 1, 2, 2, 0],
@@ -77,14 +94,12 @@ function initialize() {
     let boardColorMap = {0: 0x476C9B, 1: 0x273C56, 2: 0x468C99, 3: 0xBAB155};
     let pawnColorMap = {1: 0xADD9F4, 2: 0x101419, 3: 0x984447};
 
+    // State variables
     var board = null;
     var pawns = [];
     var selectedPawn = null;
     var currentMoves = [];
     var playerColor = 1;
-    var isPlayerTurn = true;
-
-
 
     // Draw the board
     function drawCell(g, x, y, color) {
@@ -186,6 +201,8 @@ function initialize() {
         }   
     }
 
+    // Interop functions
+
     function convertBoardToNative() {
         var arr = new Int32Array(81);
         for (let x = 0; x<9; x++) {
@@ -226,7 +243,7 @@ function initialize() {
         var outputPtr = Module._malloc(81 * 4);
         Module.HEAP32.set(nativeBoard, boardPtr/nativeBoard.BYTES_PER_ELEMENT);
 
-        calculate_board(boardPtr, outputPtr, selectedPawn.boardX, selectedPawn.boardY, targetX, targetY);
+        let result = calculate_board(boardPtr, outputPtr, selectedPawn.boardX, selectedPawn.boardY, targetX, targetY);
         let buffer = new Int32Array(Module.HEAP32.buffer, outputPtr, 81);
 
         for (let x = 0; x<9; x++) {
@@ -243,6 +260,16 @@ function initialize() {
 
         renderPawns();
         drawBoard(boardConfig);
+
+        if (result != 0) {
+            if (result == 1) {
+                alert("White WIN!");
+            }else{
+                alert("Black WIN!");
+            }
+            resetGame();
+            return;
+        }
 
         if (!enemy) {
             setTimeout(function() {
@@ -275,6 +302,8 @@ function initialize() {
     // Game mechanics
     function resetGame() {
         board = JSON.parse(JSON.stringify(initialBoard));
+        selectedPawn = null;
+        currentMoves = [];
         drawBoard(boardConfig);
         renderPawns();
     }

@@ -1,0 +1,35 @@
+body {
+    background-color: #101419;
+    margin: 10px;
+    color: #BBDFF6;
+    font-family: Arial, Helvetica, sans-serif;
+    text-align: center;
+}
+.navbar {
+    background-color: #101419;
+}
+
+p {
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.logo-img {
+    height: 50px;
+    display: block;
+    margin-top: 30px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+canvas {
+    padding-left: 0;
+    padding-right: 0;
+    margin-top: 30px;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+    width: 100%;
+    max-width: 450px;
+}
