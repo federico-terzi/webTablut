@@ -15,4 +15,4 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 #set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native")
 
 target_include_directories (osarracino PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-set_target_properties(osarracino PROPERTIES LINK_FLAGS "-s WASM=1 -s BINARYEN_METHOD='native-wasm' -s EXPORTED_FUNCTIONS='[_calculate_move, _get_fx, _get_fy, _get_tx, _get_ty]' -s EXTRA_EXPORTED_RUNTIME_METHODS='[\"ccall\", \"cwrap\"]'")
+set_target_properties(osarracino PROPERTIES LINK_FLAGS "-s WASM=1 -s BINARYEN_METHOD='native-wasm' -s EXPORTED_FUNCTIONS='[_calculate_board, _calculate_move, _get_fx, _get_fy, _get_tx, _get_ty, _calculate_available_moves]' -s EXTRA_EXPORTED_RUNTIME_METHODS='[\"ccall\", \"cwrap\"]'")

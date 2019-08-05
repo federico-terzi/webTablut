@@ -1,0 +1,287 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>webTablut - Play Tablut Online against your PC!</title>
+  <meta name="description" content="webTablut - Play Tablut Online against your PC!">
+  <meta name="author" content="Federico Terzi">
+
+  <link rel="stylesheet" href="css/styles.css?v=1.0">
+
+</head>
+
+<body onload='initialize()'>
+
+<script src="js/pixi.min.js"></script>
+<script src="js/scaleToWindow.js"></script>
+<script async type="text/javascript" src="js/osarracino.js"></script>
+<script>
+function initialize() {
+    // WASM functions    
+    calculate_available_moves = Module.cwrap('calculate_available_moves', null, ['number', 'number', 'number', 'number','number']);
+    calculate_board = Module.cwrap('calculate_board', null, ['number', 'number', 'number', 'number','number', 'number']);
+    calculate_move = Module.cwrap('calculate_move', null, ['number', 'number', 'number']);
+    get_fx = Module.cwrap('get_fx', 'number', []);
+    get_fy = Module.cwrap('get_fy', 'number', []);
+    get_tx = Module.cwrap('get_tx', 'number', []);
+    get_ty = Module.cwrap('get_ty', 'number', []);
+
+    let app = new PIXI.Application({ 
+        width: 450,         // default: 800
+        height: 450,        // default: 600
+        antialias: true,    // default: false
+        transparent: false, // default: false
+        resolution: 2       // default: 1
+    }
+    );
+    document.body.appendChild(app.view);
+
+    scaleToWindow(app.view); 
+    window.addEventListener("resize", function(event){
+        scaleToWindow(app.view);
+    });
+
+    // Game configuration
+    let boardConfig = [[0, 2, 2, 1, 1, 1, 2, 2, 0],
+                    [2, 0, 0, 0, 1, 0, 0, 0, 2],
+                    [2, 0, 0, 0, 0, 0, 0, 0, 2],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [1, 1, 0, 0, 1, 0, 0, 1, 1],
+                    [1, 0, 0, 0, 0, 0, 0, 0, 1],
+                    [2, 0, 0, 0, 0, 0, 0, 0, 2],
+                    [2, 0, 0, 0, 1, 0, 0, 0, 2],
+                    [0, 2, 2, 1, 1, 1, 2, 2, 0]];
+
+    let initialBoard = [[0,0,0,2,2,2,0,0,0],
+                        [0,0,0,0,2,0,0,0,0],
+                        [0,0,0,0,1,0,0,0,0],
+                        [2,0,0,0,1,0,0,0,2],
+                        [2,2,1,1,3,1,1,2,2],
+                        [2,0,0,0,1,0,0,0,2],
+                        [0,0,0,0,1,0,0,0,0],
+                        [0,0,0,0,2,0,0,0,0],
+                        [0,0,0,2,2,2,0,0,0]];
+
+    let boardCells = [[null, null, null, null, null, null, null, null, null],
+                    [null, null, null, null, null, null, null, null, null], 
+                    [null, null, null, null, null, null, null, null, null], 
+                    [null, null, null, null, null, null, null, null, null], 
+                    [null, null, null, null, null, null, null, null, null], 
+                    [null, null, null, null, null, null, null, null, null], 
+                    [null, null, null, null, null, null, null, null, null], 
+                    [null, null, null, null, null, null, null, null, null], 
+                    [null, null, null, null, null, null, null, null, null]]; 
+
+    let boardColorMap = {0: 0x476C9B, 1: 0x273C56, 2: 0x468C99, 3: 0xBAB155};
+    let pawnColorMap = {1: 0xADD9F4, 2: 0x101419, 3: 0x984447};
+
+    var board = null;
+    var pawns = [];
+    var selectedPawn = null;
+    var currentMoves = [];
+    var playerColor = 1;
+    var isPlayerTurn = true;
+
+
+
+    // Draw the board
+    function drawCell(g, x, y, color) {
+        g.clear();
+        g.lineStyle(2, 0x101419, 1);
+        g.beginFill(color);
+        g.drawRect(0, 0, 50, 50);
+        g.endFill();
+        g.position.x = x*50;
+        g.position.y = y*50;
+
+        g.boardX = x;
+        g.boardY = y;
+
+        g.buttonMode = true;
+        g.interactive = true;
+        g.on('pointerdown', function() {
+            var found = false;
+            for (var i in currentMoves) {
+                if (currentMoves[i].x == this.boardX && currentMoves[i].y == this.boardY) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                makeMove(this.boardX, this.boardY, false);
+            }
+        });
+    }
+
+    function drawBoard(b) {
+        for (var x = 0; x<9; x++) {
+            for (var y = 0; y<9; y++) {
+                let color = boardColorMap[b[x][y]];   
+                if (boardCells[x][y] == null) {
+                    let g = new PIXI.Graphics();
+                    boardCells[x][y] = g;
+                    app.stage.addChild(g);
+                }
+                drawCell(boardCells[x][y], x, y, color);
+            }
+        }   
+    }
+
+    function drawPawn(x, y, t) {
+        let g = new PIXI.Graphics();
+        g.lineStyle(0); // draw a circle, set the lineStyle to zero so the circle doesn't have an outline
+        g.beginFill(pawnColorMap[t], 1);
+        g.drawCircle(0, 0, 20);
+        g.endFill();
+        g.position.x = x*50+25;
+        g.position.y = y*50+25;
+        g.alpha = 1;
+
+        g.buttonMode = true;
+        g.interactive = true;
+        g.boardX = x;
+        g.boardY = y;
+        g.colorType = t;
+
+        g.on('pointerover', function() {
+            this.position.y = y*50+20;
+        }).on('pointerout', function() {
+            this.position.y = y*50+25;
+        }).on('pointerdown', function() {
+            if (this.colorType == playerColor || (this.colorType == 3 && playerColor == 1)) {
+                selectedPawn = this;
+                currentMoves = calculateAvailableMoves(this);
+                let newBoard = JSON.parse(JSON.stringify(boardConfig));
+                for (var i in currentMoves) {
+                    newBoard[currentMoves[i].x][currentMoves[i].y] = 3;
+                }
+                drawBoard(newBoard);
+            }else{
+                selectedPawn = null;
+                currentMoves = [];
+                drawBoard(boardConfig);
+            }
+        });
+        
+        
+        return g;
+    }
+
+    function renderPawns() {
+        for (let i in pawns) {
+            app.stage.removeChild(pawns[i]);
+        }        
+        pawns = [];
+
+        for (var x = 0; x<9; x++) {
+            for (var y = 0; y<9; y++) {
+                if (board[x][y] != 0) {
+                    let g = drawPawn(x,y,board[x][y]);
+                    app.stage.addChild(g);
+                    pawns.push(g);
+                }                
+            }
+        }   
+    }
+
+    function convertBoardToNative() {
+        var arr = new Int32Array(81);
+        for (let x = 0; x<9; x++) {
+            for (let y = 0; y<9; y++) {
+                arr[x+y*9] = board[x][y];
+            }
+        }
+        return arr;
+    }
+
+    function calculateAvailableMoves(pawn) {
+        let nativeBoard = convertBoardToNative();
+
+        var boardPtr = Module._malloc(nativeBoard.length * nativeBoard.BYTES_PER_ELEMENT);
+        var outputPtr = Module._malloc(100 * 4);
+        Module.HEAP32.set(nativeBoard, boardPtr/nativeBoard.BYTES_PER_ELEMENT);
+
+        calculate_available_moves(boardPtr, playerColor == 1, outputPtr, pawn.boardX, pawn.boardY);
+        let buffer = new Int32Array(Module.HEAP32.buffer, outputPtr, 100);
+
+        let moves = [];
+        var current = 0;
+        while(buffer[current] > -1) {
+            moves.push({x: buffer[current], y: buffer[current+1]});
+            current+=2;
+        }
+
+        Module._free(boardPtr);
+        Module._free(outputPtr);
+
+        return moves;
+    }
+
+    function makeMove(targetX, targetY, enemy) {
+        let nativeBoard = convertBoardToNative();
+
+        var boardPtr = Module._malloc(nativeBoard.length * nativeBoard.BYTES_PER_ELEMENT);
+        var outputPtr = Module._malloc(81 * 4);
+        Module.HEAP32.set(nativeBoard, boardPtr/nativeBoard.BYTES_PER_ELEMENT);
+
+        calculate_board(boardPtr, outputPtr, selectedPawn.boardX, selectedPawn.boardY, targetX, targetY);
+        let buffer = new Int32Array(Module.HEAP32.buffer, outputPtr, 81);
+
+        for (let x = 0; x<9; x++) {
+            for (let y=0; y<9; y++) {
+                board[x][y] = buffer[x*9+y];
+            }
+        }
+
+        Module._free(boardPtr);
+        Module._free(outputPtr);
+
+        selectedPawn = null;
+        currentMoves = [];
+
+        renderPawns();
+        drawBoard(boardConfig);
+
+        if (!enemy) {
+            setTimeout(function() {
+                calculateEnemyMove();
+            }, 100);
+        }
+    }
+
+    function calculateEnemyMove() {
+        let nativeBoard = convertBoardToNative();
+
+        var boardPtr = Module._malloc(nativeBoard.length * nativeBoard.BYTES_PER_ELEMENT);
+        Module.HEAP32.set(nativeBoard, boardPtr/nativeBoard.BYTES_PER_ELEMENT);
+
+        calculate_move(boardPtr, playerColor != 1, 1);
+        
+        var fx = get_fx();
+        var fy = get_fy();
+        var tx = get_tx();
+        var ty = get_ty();
+
+        selectedPawn = {boardX: fx, boardY: fy};
+
+        Module._free(boardPtr);
+
+        makeMove(tx, ty, true);
+    }
+
+
+    // Game mechanics
+    function resetGame() {
+        board = JSON.parse(JSON.stringify(initialBoard));
+        drawBoard(boardConfig);
+        renderPawns();
+    }
+
+    resetGame();
+};
+</script>
+
+</body>
+</html>
